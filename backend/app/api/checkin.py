@@ -240,3 +240,106 @@ async def extend_stay(
         "message": "Stay extended",
         "new_check_out_time": new_check_out_time
     }
+
+
+@router.post("/upgrade")
+async def upgrade_room(
+    check_in_id: int,
+    upgrade_type: int,  # 1=升级, 2=降级
+    old_room_type: int,
+    new_room_type: int,
+    new_room_id: int,
+    old_rate: float,
+    new_rate: float,
+    rate_diff: float,
+    nights: int,
+    total_diff: float,
+    upgrade_reason: int,  # 1=付费, 2=会员权益, 3=投诉补偿, 4=超售安排
+    is_free: int = 0,
+    notes: str = None,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """升级/降级处理（edge-2-3-3）"""
+    # 获取入住记录
+    check_in = db.query(CheckIn).filter(CheckIn.id == check_in_id).first()
+    if not check_in:
+        raise HTTPException(status_code=404, detail="Check-in not found")
+    
+    if check_in.status == CheckInStatus.CHECKED_OUT:
+        raise HTTPException(status_code=400, detail="Already checked out")
+    
+    # 获取新房
+    new_room = db.query(Room).filter(Room.id == new_room_id).first()
+    if not new_room:
+        raise HTTPException(status_code=404, detail="New room not found")
+    
+    if new_room.status != RoomStatus.AVAILABLE:
+        raise HTTPException(status_code=400, detail="New room is not available")
+    
+    # 生成变更单号
+    upgrade_no = f"UP{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
+    # 创建变更记录
+    from app.models.models import RoomUpgrade
+    upgrade = RoomUpgrade(
+        upgrade_no=upgrade_no,
+        check_in_id=check_in_id,
+        upgrade_type=upgrade_type,
+        old_room_type=old_room_type,
+        new_room_type=new_room_type,
+        old_room=check_in.room_id,
+        new_room=new_room_id,
+        old_rate=old_rate,
+        new_rate=new_rate,
+        rate_diff=rate_diff,
+        nights=nights,
+        total_diff=total_diff,
+        upgrade_reason=upgrade_reason,
+        is_free=is_free,
+        operator_id=current_user.id,
+        notes=notes,
+        status="completed"
+    )
+    db.add(upgrade)
+    
+    # 更新入住记录的房间和房价
+    check_in.room_id = new_room_id
+    check_in.room_rate = new_rate
+    
+    # 更新原房间状态
+    old_room = db.query(Room).filter(Room.id == check_in.room_id).first()
+    if old_room:
+        old_room.status = RoomStatus.CLEANING
+    
+    # 更新新房状态
+    new_room.status = RoomStatus.OCCUPIED
+    
+    # 记录操作日志
+    log = OperationLog(
+        user_id=current_user.id,
+        module="frontdesk",
+        operation="room_upgrade",
+        target_type="check_in",
+        target_id=check_in.id,
+        details={
+            "upgrade_no": upgrade_no,
+            "upgrade_type": "upgrade" if upgrade_type == 1 else "downgrade",
+            "old_room": old_room.number if old_room else None,
+            "new_room": new_room.number,
+            "old_rate": old_rate,
+            "new_rate": new_rate,
+            "total_diff": total_diff
+        }
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(upgrade)
+    
+    return {
+        "message": "Room upgrade successful",
+        "upgrade_no": upgrade_no,
+        "new_room": new_room.number,
+        "new_rate": new_rate,
+        "total_diff": total_diff
+    }

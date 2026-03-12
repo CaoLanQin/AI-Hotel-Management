@@ -69,7 +69,7 @@ export default function ProcurementProductsPage() {
     },
   });
 
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = cartItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   // 添加到购物车
   const addToCartMutation = useMutation({

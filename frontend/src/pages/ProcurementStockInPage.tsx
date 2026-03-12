@@ -302,7 +302,7 @@ export default function ProcurementStockInPage() {
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     >
                       <option value="">请选择供应商</option>
-                      {suppliers.map(s => (
+                      {suppliers.map((s: any) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>

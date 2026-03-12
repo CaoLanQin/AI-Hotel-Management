@@ -111,6 +111,8 @@ const RoomControlPage = () => {
   // 自定义滑块
   const CustomSlider = ({ deviceId, min, max, value, onChangeComplete, color }: any) => {
     const sliderRef = useRef<HTMLDivElement>(null);
+    const isDragging = useRef(false);
+    const currentDragValue = useRef(value);
     
     // 使用全局状态存储实时值
     const currentValue = sliderValues[deviceId] ?? value;
@@ -121,25 +123,53 @@ const RoomControlPage = () => {
       const rect = sliderRef.current.getBoundingClientRect();
       const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const newValue = Math.round(min + percent * (max - min));
+      currentDragValue.current = newValue;
       setSliderValues(prev => ({ ...prev, [deviceId]: newValue }));
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
       e.preventDefault();
+      isDragging.current = true;
       updateValue(e.clientX);
       
       const handleMouseMove = (moveEvent: MouseEvent) => {
-        updateValue(moveEvent.clientX);
+        if (isDragging.current) {
+          updateValue(moveEvent.clientX);
+        }
       };
       
       const handleMouseUp = () => {
-        onChangeComplete(sliderValues[deviceId] ?? value);
+        isDragging.current = false;
+        onChangeComplete(currentDragValue.current);
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
       
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+    };
+
+    // 触摸支持
+    const handleTouchStart = (e: React.TouchEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      updateValue(e.touches[0].clientX);
+      
+      const handleTouchMove = (moveEvent: TouchEvent) => {
+        if (isDragging.current && moveEvent.touches[0]) {
+          updateValue(moveEvent.touches[0].clientX);
+        }
+      };
+      
+      const handleTouchEnd = () => {
+        isDragging.current = false;
+        onChangeComplete(currentDragValue.current);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+      
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchend', handleTouchEnd);
     };
 
     return (
@@ -152,9 +182,11 @@ const RoomControlPage = () => {
           borderRadius: '4px', 
           position: 'relative',
           cursor: 'pointer',
-          marginTop: '8px'
+          marginTop: '8px',
+          touchAction: 'none'
         }}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
         <div 
           style={{ 

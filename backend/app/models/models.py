@@ -759,3 +759,44 @@ class EnergyRecord(Base):
     energy = Column(Float, default=0)  # 能耗 (kWh)
     duration = Column(Integer, default=0)  #运行时长(秒)
     recorded_at = Column(DateTime, server_default=func.now())
+
+
+class UpgradeType(str, enum.Enum):
+    """变更类型"""
+    UPGRADE = 1
+    DOWNGRADE = 2
+
+
+class UpgradeReason(str, enum.Enum):
+    """升级原因"""
+    PAID = 1        # 付费升级
+    VIP = 2         # 会员权益
+    COMPENSATION = 3  # 投诉补偿
+    OVERBOOKING = 4   # 超售安排
+
+
+class RoomUpgrade(Base):
+    """房型变更记录表"""
+    __tablename__ = "room_upgrades"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    upgrade_no = Column(String(32), unique=True, index=True, nullable=False)  # 变更单号
+    check_in_id = Column(Integer, ForeignKey("check_ins.id"), nullable=False)
+    upgrade_type = Column(Integer, nullable=False)  # 1=升级, 2=降级
+    old_room_type = Column(Integer, ForeignKey("room_types.id"), nullable=False)
+    new_room_type = Column(Integer, ForeignKey("room_types.id"), nullable=False)
+    old_room = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    new_room = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    old_rate = Column(Float, nullable=False, default=0)  # 原房价
+    new_rate = Column(Float, nullable=False, default=0)  # 新房价
+    rate_diff = Column(Float, nullable=False, default=0)  # 差价/晚
+    nights = Column(Integer, nullable=False, default=0)  # 剩余晚数
+    total_diff = Column(Float, nullable=False, default=0)  # 总差价
+    upgrade_reason = Column(Integer, nullable=False, default=1)  # 升级原因
+    is_free = Column(Integer, nullable=False, default=0)  # 是否免费
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    notes = Column(Text)
+    status = Column(String(20), default="completed")  # 状态: pending, completed, cancelled
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

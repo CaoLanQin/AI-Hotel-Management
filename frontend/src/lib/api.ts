@@ -239,6 +239,33 @@ export const devices = {
     const response = await api.post(`/devices/scene/${sceneId}/execute`);
     return response.data;
   },
+  
+  // Scenes
+  getScenes: async () => {
+    const response = await api.get('/devices/scenes');
+    return response.data;
+  },
+  
+  getScenesByRoom: async (roomId: number) => {
+    const response = await api.get(`/devices/scenes?room_id=${roomId}`);
+    return response.data;
+  },
+  
+  // Energy
+  getEnergyDashboard: async () => {
+    const response = await api.get('/devices/energy/dashboard');
+    return response.data;
+  },
+  
+  getRoomEnergy: async (roomId: number) => {
+    const response = await api.get(`/devices/energy/room/${roomId}`);
+    return response.data;
+  },
+  
+  getEnergyAlerts: async () => {
+    const response = await api.get('/devices/energy/alerts');
+    return response.data;
+  },
 };
 
 // Dashboard API

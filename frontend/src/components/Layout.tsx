@@ -23,8 +23,14 @@ const menuItems = [
   { path: '/rooms', label: '房间管理', icon: DoorOpen },
   { path: '/bookings', label: '预订管理', icon: CalendarDays },
   { path: '/checkin', label: '入住管理', icon: UserCheck },
+  { path: '/upgrade', label: '升级降级', icon: FileText },
   { path: '/devices', label: '设备控制', icon: Settings },
   { path: '/room-control', label: '客房智控', icon: Home },
+  { path: '/device-topology', label: '设备拓扑', icon: Settings },
+  { path: '/scenes', label: '场景管理', icon: Home },
+  { path: '/security', label: '安防监控', icon: AlertTriangle },
+  { path: '/maintenance', label: '维修管理', icon: Settings },
+  { path: '/rules', label: '规则引擎', icon: Zap },
   { path: '/energy', label: '能耗管理', icon: Zap },
 ];
 

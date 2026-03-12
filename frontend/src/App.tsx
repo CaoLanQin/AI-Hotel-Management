@@ -7,6 +7,12 @@ import DashboardPage from '@/pages/DashboardPage';
 import RoomsPage from '@/pages/RoomsPage';
 import BookingsPage from '@/pages/BookingsPage';
 import CheckInPage from '@/pages/CheckInPage';
+import UpgradePage from '@/pages/UpgradePage';
+import DeviceTopologyPage from '@/pages/DeviceTopologyPage';
+import ScenesPage from '@/pages/ScenesPage';
+import RulesPage from '@/pages/RulesPage';
+import SecurityMonitoringPage from '@/pages/SecurityMonitoringPage';
+import MaintenancePage from '@/pages/MaintenancePage';
 import DevicesPage from '@/pages/DevicesPage';
 import RoomControlPage from '@/pages/RoomControlPage';
 import EnergyDashboardPage from '@/pages/EnergyDashboardPage';
@@ -48,6 +54,12 @@ const AppRoutes = () => {
         <Route path="rooms" element={<RoomsPage />} />
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="checkin" element={<CheckInPage />} />
+        <Route path="upgrade" element={<UpgradePage />} />
+        <Route path="device-topology" element={<DeviceTopologyPage />} />
+        <Route path="scenes" element={<ScenesPage />} />
+        <Route path="security" element={<SecurityMonitoringPage />} />
+        <Route path="maintenance" element={<MaintenancePage />} />
+        <Route path="rules" element={<RulesPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="room-control" element={<RoomControlPage />} />
         <Route path="energy" element={<EnergyDashboardPage />} />

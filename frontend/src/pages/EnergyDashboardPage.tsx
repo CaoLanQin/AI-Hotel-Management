@@ -1,135 +1,261 @@
-import { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, DatePicker } from 'antd';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Card, Row, Col, Statistic, Table, Tag, DatePicker, Select, Button, Spin } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import { 
   Zap,
   Gauge,
-  AlertTriangle,
   TrendingDown,
-  Home
+  Home,
+  RefreshCw
 } from 'lucide-react';
 import api from '../lib/api';
+import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
+const { Option } = Select;
+
+interface EnergyData {
+  total_energy: number;
+  device_breakdown: Record<string, number>;
+  trend: Array<{ date: string; energy: number }>;
+}
+
+interface Alert {
+  id: number;
+  type: string;
+  message: string;
+  room_id: number;
+  severity: string;
+  created_at: string;
+}
 
 const EnergyDashboardPage = () => {
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState<any>({
-    total_consumption: 1250,
-    today_consumption: 85,
-    cost: 1560,
-    avg_daily: 42,
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
+  const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
+
+  // Fetch energy dashboard data
+  const { data: energyData, isLoading: energyLoading, refetch: refetchEnergy } = useQuery({
+    queryKey: ['energy-dashboard', dateRange],
+    queryFn: async () => {
+      const res = await api.get('/devices/energy/dashboard');
+      return res.data as EnergyData;
+    },
   });
+
+  // Fetch energy alerts
+  const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
+    queryKey: ['energy-alerts'],
+    queryFn: async () => {
+      const res = await api.get('/devices/energy/alerts');
+      return res.data as Alert[];
+    },
+  });
+
+  // Fetch rooms for filter
+  const { data: roomsData } = useQuery({
+    queryKey: ['rooms'],
+    queryFn: async () => {
+      const res = await api.get('/rooms');
+      return res.data?.rooms || res.data || [];
+    },
+  });
+
+  // Fetch room energy if selected
+  const { data: roomEnergyData, isLoading: roomEnergyLoading } = useQuery({
+    queryKey: ['room-energy', selectedRoom],
+    queryFn: async () => {
+      if (!selectedRoom) return null;
+      const res = await api.get(`/devices/energy/room/${selectedRoom}`);
+      return res.data;
+    },
+    enabled: !!selectedRoom,
+  });
+
+  // Calculate stats from real data
+  const stats = {
+    today_consumption: energyData?.trend?.[energyData.trend?.length - 1]?.energy || 0,
+    total_consumption: energyData?.total_energy || 0,
+    cost: (energyData?.total_energy || 0) * 1.2, // Assuming 1.2 RMB per kWh
+    avg_daily: energyData?.trend?.length ? energyData.trend.reduce((sum, t) => sum + t.energy, 0) / energyData.trend.length : 0,
+  };
 
   // 能耗趋势图配置
-  const getTrendChartOption = () => ({
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
-      axisLine: { lineStyle: { color: '#999' } },
-      axisLabel: { color: '#666' }
-    },
-    yAxis: {
-      type: 'value',
-      name: 'kWh',
-      axisLine: { lineStyle: { color: '#999' } },
-      axisLabel: { color: '#666' },
-      splitLine: { lineStyle: { color: '#eee' } }
-    },
-    series: [
-      {
-        data: [12, 15, 18, 25, 22, 18, 15],
-        type: 'line',
-        smooth: true,
-        areaStyle: { color: 'rgba(102, 126, 234, 0.2)' },
-        lineStyle: { color: '#667eea', width: 2 },
-        itemStyle: { color: '#667eea' }
-      }
-    ],
-    grid: { left: 40, right: 20, top: 30, bottom: 30 }
-  });
+  const getTrendChartOption = () => {
+    const dates = energyData?.trend?.map(t => t.date.slice(5)) || [];
+    const values = energyData?.trend?.map(t => t.energy) || [];
+    
+    return {
+      tooltip: { trigger: 'axis' },
+      xAxis: {
+        type: 'category',
+        data: dates.length ? dates : ['暂无数据'],
+        axisLine: { lineStyle: { color: '#999' } },
+        axisLabel: { color: '#666' }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'kWh',
+        axisLine: { lineStyle: { color: '#999' } },
+        axisLabel: { color: '#666' },
+        splitLine: { lineStyle: { color: '#eee' } }
+      },
+      series: [
+        {
+          data: values.length ? values : [0],
+          type: 'line',
+          smooth: true,
+          areaStyle: { color: 'rgba(102, 126, 234, 0.2)' },
+          lineStyle: { color: '#667eea', width: 2 },
+          itemStyle: { color: '#667eea' }
+        }
+      ],
+      grid: { left: 40, right: 20, top: 30, bottom: 30 }
+    };
+  };
 
   // 能耗占比图配置
-  const getPieChartOption = () => ({
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: '#666' } },
-    series: [
-      {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['50%', '45%'],
-        itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
-        label: { show: false },
-        data: [
-          { value: 45, name: '空调', itemStyle: { color: '#667eea' } },
-          { value: 25, name: '照明', itemStyle: { color: '#fbbf24' } },
-          { value: 15, name: '电视', itemStyle: { color: '#4ade80' } },
-          { value: 15, name: '其他', itemStyle: { color: '#a78bfa' } }
-        ]
-      }
-    ]
-  });
+  const getPieChartOption = () => {
+    const breakdown = energyData?.device_breakdown || {};
+    
+    const colors: Record<string, string> = {
+      ac: '#667eea',
+      light: '#fbbf24',
+      tv: '#4ade80',
+      curtain: '#f472b6',
+      fan: '#a78bfa',
+      other: '#94a3b8'
+    };
+    
+    const deviceNames: Record<string, string> = {
+      ac: '空调',
+      light: '照明',
+      tv: '电视',
+      curtain: '窗帘',
+      fan: '风扇',
+      other: '其他'
+    };
+    
+    const pieData = Object.entries(breakdown).map(([key, value]) => ({
+      value: value as number,
+      name: deviceNames[key] || key,
+      itemStyle: { color: colors[key] || colors.other }
+    }));
+    
+    if (pieData.length === 0) {
+      pieData.push({ value: 1, name: '暂无数据', itemStyle: { color: '#e5e7eb' } });
+    }
+    
+    return {
+      tooltip: { trigger: 'item', formatter: '{b}: {c} kWh ({d}%)' },
+      legend: { bottom: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: '#666' } },
+      series: [
+        {
+          type: 'pie',
+          radius: ['40%', '70%'],
+          center: ['50%', '45%'],
+          itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+          label: { show: false },
+          data: pieData
+        }
+      ]
+    };
+  };
 
-  // 用电记录
-  const records = [
-    { id: 1, time: '2026-03-12 10:00', type: '用电', amount: 12.5, cost: 15.6 },
-    { id: 2, time: '2026-03-12 09:00', type: '用电', amount: 15.2, cost: 19.0 },
-    { id: 3, time: '2026-03-12 08:00', type: '用电', amount: 10.8, cost: 13.5 },
-    { id: 4, time: '2026-03-12 07:00', type: '用电', amount: 8.5, cost: 10.6 },
+  // Alert columns
+  const alertColumns = [
+    { 
+      title: '时间', 
+      dataIndex: 'created_at', 
+      key: 'created_at',
+      render: (val: string) => dayjs(val).format('MM-DD HH:mm')
+    },
+    { 
+      title: '类型', 
+      dataIndex: 'type', 
+      key: 'type',
+      render: (type: string) => {
+        const typeNames: Record<string, string> = {
+          high_consumption: '高能耗',
+          anomaly: '异常',
+          offline: '离线'
+        };
+        return <Tag color={type === 'high_consumption' ? 'orange' : 'red'}>{typeNames[type] || type}</Tag>;
+      }
+    },
+    { title: '消息', dataIndex: 'message', key: 'message' },
   ];
 
-  const columns = [
-    { title: '时间', dataIndex: 'time', key: 'time' },
-    { title: '类型', dataIndex: 'type', key: 'type', render: (t: string) => <Tag color="blue">{t}</Tag> },
-    { title: '用量(kWh)', dataIndex: 'amount', key: 'amount' },
-    { title: '费用(¥)', dataIndex: 'cost', key: 'cost' },
+  // Room energy columns
+  const roomColumns = [
+    { title: '时间', dataIndex: 'timestamp', key: 'timestamp', render: (val: string) => val ? dayjs(val).format('MM-DD HH:mm') : '-' },
+    { title: '设备类型', dataIndex: 'device_type', key: 'device_type' },
+    { title: '能耗(kWh)', dataIndex: 'energy', key: 'energy' },
   ];
 
   return (
     <div className="p-6" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', minHeight: '100vh' }}>
-      <h1 className="text-2xl font-bold mb-6" style={{ color: '#fff' }}>能耗管理</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold" style={{ color: '#fff' }}>⚡ 能耗管理</h1>
+        <div className="flex gap-2">
+          <Button icon={<RefreshCw />} onClick={() => { refetchEnergy(); refetchAlerts(); }}>
+            刷新数据
+          </Button>
+        </div>
+      </div>
       
       {/* 统计卡片 */}
       <Row gutter={16} className="mb-4">
         <Col span={6}>
           <Card>
-            <Statistic 
-              title="今日用电" 
-              value={stats.today_consumption} 
-              suffix="kWh"
-              prefix={<Zap />}
-            />
+            <Spin spinning={energyLoading}>
+              <Statistic 
+                title="今日用电" 
+                value={stats.today_consumption} 
+                suffix="kWh"
+                prefix={<Zap />}
+                precision={1}
+              />
+            </Spin>
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic 
-              title="本月累计" 
-              value={stats.total_consumption} 
-              suffix="kWh"
-              prefix={<Gauge />}
-            />
+            <Spin spinning={energyLoading}>
+              <Statistic 
+                title="本月累计" 
+                value={stats.total_consumption} 
+                suffix="kWh"
+                prefix={<Gauge />}
+                precision={1}
+              />
+            </Spin>
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic 
-              title="本月费用" 
-              value={stats.cost} 
-              suffix="¥"
-              prefix={<TrendingDown />}
-            />
+            <Spin spinning={energyLoading}>
+              <Statistic 
+                title="本月费用" 
+                value={stats.cost} 
+                suffix="¥"
+                prefix={<TrendingDown />}
+                precision={2}
+              />
+            </Spin>
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic 
-              title="日均用电" 
-              value={stats.avg_daily} 
-              suffix="kWh"
-              prefix={<Home />}
-            />
+            <Spin spinning={energyLoading}>
+              <Statistic 
+                title="日均用电" 
+                value={stats.avg_daily} 
+                suffix="kWh"
+                prefix={<Home />}
+                precision={1}
+              />
+            </Spin>
           </Card>
         </Col>
       </Row>
@@ -137,7 +263,16 @@ const EnergyDashboardPage = () => {
       {/* 图表区域 */}
       <Row gutter={16} className="mb-4">
         <Col span={16}>
-          <Card title="能耗趋势" extra={<RangePicker />}>
+          <Card title="能耗趋势" extra={
+            <RangePicker 
+              value={dateRange}
+              onChange={(dates) => {
+                if (dates && dates[0] && dates[1]) {
+                  setDateRange([dates[0], dates[1]]);
+                }
+              }}
+            />
+          }>
             <ReactECharts option={getTrendChartOption()} style={{ height: '300px' }} />
           </Card>
         </Col>
@@ -148,20 +283,70 @@ const EnergyDashboardPage = () => {
         </Col>
       </Row>
 
-      {/* 用电记录 */}
-      <Row>
-        <Col span={24}>
-          <Card title="用电记录">
-            <Table 
-              dataSource={records} 
-              columns={columns}
-              rowKey="id"
-              size="small"
-              pagination={false}
-            />
+      {/* Room filter and details */}
+      <Row gutter={16} className="mb-4">
+        <Col span={8}>
+          <Card title="房间能耗查询">
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择房间查看能耗"
+              value={selectedRoom}
+              onChange={setSelectedRoom}
+              allowClear
+            >
+              {(roomsData || []).map((room: any) => (
+                <Option key={room.id} value={room.id}>
+                  {room.number} - {room.room_type?.name || '未知房型'}
+                </Option>
+              ))}
+            </Select>
+            {selectedRoom && roomEnergyData && (
+              <div className="mt-4">
+                <Statistic 
+                  title="房间总能耗" 
+                  value={roomEnergyData.total_energy || 0} 
+                  suffix="kWh"
+                  prefix={<Zap />}
+                />
+              </div>
+            )}
+          </Card>
+        </Col>
+        <Col span={16}>
+          <Card title="能耗告警" extra={<Tag color="red">{alertsData?.length || 0} 条</Tag>}>
+            <Spin spinning={alertsLoading}>
+              <Table 
+                dataSource={alertsData?.slice(0, 5) || []} 
+                columns={alertColumns}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                locale={{ emptyText: '暂无告警' }}
+              />
+            </Spin>
           </Card>
         </Col>
       </Row>
+
+      {/* Room energy details */}
+      {selectedRoom && (
+        <Row>
+          <Col span={24}>
+            <Card title={`房间 ${(roomsData || []).find((r: any) => r.id === selectedRoom)?.number || ''} 能耗明细`}>
+              <Spin spinning={roomEnergyLoading}>
+                <Table 
+                  dataSource={roomEnergyData?.records || []} 
+                  columns={roomColumns}
+                  rowKey="id"
+                  size="small"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: '暂无数据' }}
+                />
+              </Spin>
+            </Card>
+          </Col>
+        </Row>
+      )}
     </div>
   );
 };
