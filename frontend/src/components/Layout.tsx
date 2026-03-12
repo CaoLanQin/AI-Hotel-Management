@@ -13,7 +13,9 @@ import {
   Truck,
   AlertTriangle,
   FileText,
-  Store
+  Store,
+  Home,
+  Zap
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,6 +24,8 @@ const menuItems = [
   { path: '/bookings', label: '预订管理', icon: CalendarDays },
   { path: '/checkin', label: '入住管理', icon: UserCheck },
   { path: '/devices', label: '设备控制', icon: Settings },
+  { path: '/room-control', label: '客房智控', icon: Home },
+  { path: '/energy', label: '能耗管理', icon: Zap },
 ];
 
 const procurementMenuItems = [

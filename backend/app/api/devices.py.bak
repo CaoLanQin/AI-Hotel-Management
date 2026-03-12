@@ -1,0 +1,385 @@
+"""
+Hotel Edge System - Device Control API
+客房设备控制接口
+"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from app.core.database import get_db
+from app.models.models import RoomDevice, Room, Scene
+from app.schemas.schemas import (
+    RoomDeviceResponse, RoomDeviceCreate, RoomDeviceUpdate,
+    DeviceControlRequest
+)
+from app.api.auth import get_current_user
+from app.schemas.schemas import UserResponse
+
+router = APIRouter()
+
+
+@router.get("", response_model=List[RoomDeviceResponse])
+async def get_devices(
+    skip: int = 0,
+    limit: int = 100,
+    room_id: int = None,
+    device_type: str = None,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """获取设备列表"""
+    query = db.query(RoomDevice)
+    if room_id:
+        query = query.filter(RoomDevice.room_id == room_id)
+    if device_type:
+        query = query.filter(RoomDevice.device_type == device_type)
+    
+    devices = query.offset(skip).limit(limit).all()
+    return devices
+
+
+@router.get("/{device_id}", response_model=RoomDeviceResponse)
+async def get_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """获取设备详情"""
+    device = db.query(RoomDevice).filter(RoomDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return device
+
+
+@router.post("", response_model=RoomDeviceResponse)
+async def create_device(
+    device: RoomDeviceCreate,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """添加设备"""
+    # 检查房间是否存在
+    room = db.query(Room).filter(Room.id == device.room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    # 检查设备编码是否已存在
+    existing = db.query(RoomDevice).filter(RoomDevice.device_code == device.device_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Device code already exists")
+    
+    db_device = RoomDevice(**device.model_dump(), status="offline")
+    db.add(db_device)
+    db.commit()
+    db.refresh(db_device)
+    return db_device
+
+
+@router.put("/{device_id}", response_model=RoomDeviceResponse)
+async def update_device(
+    device_id: int,
+    device: RoomDeviceUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """更新设备"""
+    db_device = db.query(RoomDevice).filter(RoomDevice.id == device_id).first()
+    if not db_device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    for key, value in device.model_dump(exclude_unset=True).items():
+        setattr(db_device, key, value)
+    
+    db.commit()
+    db.refresh(db_device)
+    return db_device
+
+
+@router.post("/control")
+async def control_device(
+    request: DeviceControlRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """控制设备（单房设备控制 edge-3-1-2）"""
+    device = db.query(RoomDevice).filter(RoomDevice.id == request.device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 更新设备状态
+    if device.state is None:
+        device.state = {}
+    
+    if request.action == "on":
+        device.state["power"] = "on"
+    elif request.action == "off":
+        device.state["power"] = "off"
+    elif request.action == "set" and request.value:
+        device.state.update(request.value)
+    
+    device.status = "online"
+    db.commit()
+    
+    # TODO: 通过 MQTT 发送控制命令到实际设备
+    # mqtt_client.publish(device.mqtt_topic, json.dumps(device.state))
+    
+    return {
+        "message": "Device controlled",
+        "device_id": device.id,
+        "device_name": device.device_name,
+        "action": request.action,
+        "state": device.state
+    }
+
+
+@router.get("/room/{room_id}")
+async def get_room_devices(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """获取房间内所有设备（客房设备拓扑 edge-3-1-1）"""
+    # 检查房间是否存在
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    devices = db.query(RoomDevice).filter(RoomDevice.room_id == room_id).all()
+    
+    # 按设备类型分组
+    device_map = {}
+    for device in devices:
+        if device.device_type not in device_map:
+            device_map[device.device_type] = []
+        device_map[device.device_type].append({
+            "id": device.id,
+            "device_name": device.device_name,
+            "device_code": device.device_code,
+            "status": device.status,
+            "state": device.state
+        })
+    
+    return {
+        "room_id": room_id,
+        "room_number": room.number,
+        "devices": device_map
+    }
+
+
+@router.post("/scene/{scene_id}/execute")
+async def execute_scene(
+    scene_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """执行场景（场景联动 edge-3-2-2）"""
+    from app.models.models import Scene
+    
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    
+    if not scene.is_active:
+        raise HTTPException(status_code=400, detail="Scene is not active")
+    
+    # 执行场景中的所有设备操作
+    results = []
+    for action in scene.actions:
+        device_type = action.get("device_type")
+        device_action = action.get("action")
+        value = action.get("value", {})
+        
+        # 查找对应类型的设备
+        devices = db.query(RoomDevice).filter(
+            RoomDevice.room_id == scene.room_id,
+            RoomDevice.device_type == device_type
+        ).all()
+        
+        for device in devices:
+            if device.state is None:
+                device.state = {}
+            
+            if device_action == "on":
+                device.state["power"] = "on"
+            elif device_action == "off":
+                device.state["power"] = "off"
+            elif device_action == "set":
+                device.state.update(value)
+            
+            device.status = "online"
+            results.append({
+                "device_id": device.id,
+                "device_name": device.device_name,
+                "action": device_action,
+                "state": device.state
+            })
+    
+    db.commit()
+    
+    return {
+        "message": "Scene executed",
+        "scene_name": scene.name,
+        "actions": results
+    }
+
+
+# ==================== 场景管理 API ====================
+
+@router.get("/scenes", response_model=List[dict])
+async def get_scenes(
+    room_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """获取场景列表"""
+    query = db.query(Scene)
+    if room_id:
+        query = query.filter((Scene.room_id == room_id) | (Scene.room_id == None))
+    scenes = query.all()
+    
+    result = []
+    for s in scenes:
+        result.append({
+            "id": s.id,
+            "name": s.name,
+            "code": s.code,
+            "description": s.description,
+            "room_id": s.room_id,
+            "actions": s.actions,
+            "is_active": s.is_active,
+            "created_at": s.created_at.isoformat() if s.created_at else None
+        })
+    return result
+
+
+@router.post("/scenes", response_model=dict)
+async def create_scene(
+    scene_data: dict,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """创建场景"""
+    scene = Scene(
+        name=scene_data.get("name"),
+        code=scene_data.get("code"),
+        description=scene_data.get("description"),
+        room_id=scene_data.get("room_id"),
+        actions=scene_data.get("actions", []),
+        is_active=scene_data.get("is_active", True)
+    )
+    db.add(scene)
+    db.commit()
+    db.refresh(scene)
+    
+    return {
+        "id": scene.id,
+        "name": scene.name,
+        "code": scene.code,
+        "message": "Scene created successfully"
+    }
+
+
+@router.post("/simulate/devices")
+async def simulate_devices(
+    room_id: int = 1,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """为指定房间生成模拟设备数据"""
+    from app.models.models import RoomDevice, Room
+    
+    # 检查房间是否存在
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    # 检查是否已有设备
+    existing = db.query(RoomDevice).filter(RoomDevice.room_id == room_id).all()
+    if existing:
+        return {"message": "Devices already exist", "device_count": len(existing)}
+    
+    # 模拟设备数据
+    device_types = [
+        {"name": "智能空调", "type": "ac", "icon": "ac"},
+        {"name": "智能灯光", "type": "light", "icon": "lightbulb"},
+        {"name": "电动窗帘", "type": "curtain", "icon": "blinds"},
+        {"name": "智能电视", "type": "tv", "icon": "tv"},
+        {"name": "智能门锁", "type": "lock", "icon": "lock"},
+        {"name": "温湿度传感器", "type": "sensor", "icon": "thermometer"},
+    ]
+    
+    import random
+    devices = []
+    for dt in device_types:
+        device = RoomDevice(
+            room_id=room_id,
+            device_name=dt["name"],
+            device_type=dt["type"],
+            device_code=f"{room.number}_{dt['type'][:3].upper()}",
+            status="online",
+            state={
+                "power": random.choice(["on", "off"]),
+                "temperature": random.randint(20, 28) if dt["type"] == "ac" else None,
+                "brightness": random.randint(0, 100) if dt["type"] == "light" else None,
+                "position": random.randint(0, 100) if dt["type"] == "curtain" else None,
+            }
+        )
+        db.add(device)
+        devices.append(device)
+    
+    db.commit()
+    
+    return {
+        "message": f"Created {len(devices)} simulated devices for room {room.number}",
+        "room_id": room_id,
+        "device_count": len(devices)
+    }
+
+
+@router.get("/simulate/all")
+async def simulate_all_rooms(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """为所有房间生成模拟设备数据"""
+    from app.models.models import RoomDevice, Room
+    
+    rooms = db.query(Room).limit(10).all()  # 只模拟前10个房间
+    total_devices = 0
+    
+    import random
+    device_types = [
+        {"name": "智能空调", "type": "ac"},
+        {"name": "智能灯光", "type": "light"},
+        {"name": "电动窗帘", "type": "curtain"},
+        {"name": "智能电视", "type": "tv"},
+        {"name": "智能门锁", "type": "lock"},
+    ]
+    
+    for room in rooms:
+        # 检查是否已有设备
+        existing = db.query(RoomDevice).filter(RoomDevice.room_id == room.id).first()
+        if existing:
+            continue
+            
+        for dt in device_types:
+            device = RoomDevice(
+                room_id=room.id,
+                device_name=dt["name"],
+                device_type=dt["type"],
+                device_code=f"{room.number}_{dt['type'][:3].upper()}",
+                status="online",
+                state={
+                    "power": random.choice(["on", "off"]),
+                    "temperature": random.randint(20, 28) if dt["type"] == "ac" else None,
+                    "brightness": random.randint(0, 100) if dt["type"] == "light" else None,
+                }
+            )
+            db.add(device)
+            total_devices += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Simulated devices for {len(rooms)} rooms",
+        "total_devices": total_devices
+    }

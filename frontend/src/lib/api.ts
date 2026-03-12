@@ -268,7 +268,7 @@ export const dashboard = {
 export const purchase = {
   // Suppliers
   getSuppliers: async () => {
-    const response = await api.get('/purchase/suppliers');
+    const response = await api.get('/procurement/suppliers');
     return response.data;
   },
   
@@ -278,7 +278,7 @@ export const purchase = {
   },
   
   createSupplier: async (data: any) => {
-    const response = await api.post('/purchase/suppliers', data);
+    const response = await api.post('/procurement/suppliers', data);
     return response.data;
   },
   
@@ -294,34 +294,34 @@ export const purchase = {
   
   // Warehouses
   getWarehouses: async () => {
-    const response = await api.get('/purchase/warehouses');
+    const response = await api.get('/procurement/warehouses');
     return response.data;
   },
   
   createWarehouse: async (data: any) => {
-    const response = await api.post('/purchase/warehouses', data);
+    const response = await api.post('/procurement/warehouses', data);
     return response.data;
   },
   
   // Inventory
   getInventory: async () => {
-    const response = await api.get('/purchase/inventory');
+    const response = await api.get('/procurement/inventory');
     return response.data;
   },
   
   createInventoryItem: async (data: any) => {
-    const response = await api.post('/purchase/inventory', data);
+    const response = await api.post('/procurement/inventory', data);
     return response.data;
   },
   
   getLowStockItems: async () => {
-    const response = await api.get('/purchase/inventory/low-stock/list');
+    const response = await api.get('/procurement/inventory/low-stock/list');
     return response.data;
   },
   
   // Purchase Orders
   getPurchaseOrders: async () => {
-    const response = await api.get('/purchase/purchase-orders');
+    const response = await api.get('/procurement/purchase-orders');
     return response.data;
   },
   
@@ -331,7 +331,7 @@ export const purchase = {
   },
   
   createPurchaseOrder: async (data: any) => {
-    const response = await api.post('/purchase/purchase-orders', data);
+    const response = await api.post('/procurement/purchase-orders', data);
     return response.data;
   },
   
@@ -367,23 +367,23 @@ export const purchase = {
   
   // Stock Records
   getStockRecords: async () => {
-    const response = await api.get('/purchase/stock-records');
+    const response = await api.get('/procurement/stock-records');
     return response.data;
   },
   
   createStockRecord: async (data: any) => {
-    const response = await api.post('/purchase/stock-records', data);
+    const response = await api.post('/procurement/stock-records', data);
     return response.data;
   },
   
   // Statistics
   getPurchaseStats: async () => {
-    const response = await api.get('/purchase/purchase-statistics');
+    const response = await api.get('/procurement/purchase-statistics');
     return response.data;
   },
   
   getInventoryStats: async () => {
-    const response = await api.get('/purchase/inventory-statistics');
+    const response = await api.get('/procurement/inventory-statistics');
     return response.data;
   },
 };

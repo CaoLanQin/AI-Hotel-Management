@@ -730,3 +730,32 @@ class StockAlert(Base):
     
     # 关系
     product = relationship("Product")
+
+
+class AutomationRule(Base):
+    """自动化规则表"""
+    __tablename__ = "automation_rules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)  # 规则名称
+    description = Column(Text)  # 规则描述
+    trigger_type = Column(String(50), nullable=False)  # 触发类型: time, device_state, sensor
+    trigger_condition = Column(JSON, nullable=False)  # 触发条件
+    actions = Column(JSON, nullable=False)  # 执行动作
+    priority = Column(Integer, default=10)  # 优先级
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class EnergyRecord(Base):
+    """能耗记录表"""
+    __tablename__ = "energy_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    device_type = Column(String(50), nullable=False)  # 设备类型
+    power = Column(Float, default=0)  # 功率 (W)
+    energy = Column(Float, default=0)  # 能耗 (kWh)
+    duration = Column(Integer, default=0)  #运行时长(秒)
+    recorded_at = Column(DateTime, server_default=func.now())

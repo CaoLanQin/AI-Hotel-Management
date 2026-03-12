@@ -8,6 +8,8 @@ import RoomsPage from '@/pages/RoomsPage';
 import BookingsPage from '@/pages/BookingsPage';
 import CheckInPage from '@/pages/CheckInPage';
 import DevicesPage from '@/pages/DevicesPage';
+import RoomControlPage from '@/pages/RoomControlPage';
+import EnergyDashboardPage from '@/pages/EnergyDashboardPage';
 import ProcurementProductsPage from '@/pages/ProcurementProductsPage';
 import ProcurementCartPage from '@/pages/ProcurementCartPage';
 import ProcurementOrdersPage from '@/pages/ProcurementOrdersPage';
@@ -47,6 +49,8 @@ const AppRoutes = () => {
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="checkin" element={<CheckInPage />} />
         <Route path="devices" element={<DevicesPage />} />
+        <Route path="room-control" element={<RoomControlPage />} />
+        <Route path="energy" element={<EnergyDashboardPage />} />
         <Route path="procurement" element={<Navigate to="/procurement/products" replace />} />
         <Route path="procurement/products" element={<ProcurementProductsPage />} />
         <Route path="procurement/cart" element={<ProcurementCartPage />} />
