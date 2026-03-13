@@ -582,4 +582,118 @@ export const procurement = {
     const response = await api.get('/procurement/procurement/statistics');
     return response.data;
   },
+
+  // Menu
+  getMenus: async () => {
+    const response = await api.get('/menu/');
+    return response.data;
+  },
+  getMenuTree: async () => {
+    const response = await api.get('/menu/tree');
+    return response.data;
+  },
+  initMenus: async () => {
+    const response = await api.post('/menu/init');
+    return response.data;
+  },
+};
+
+export const menu = {
+  getMenus: async () => {
+    const response = await api.get('/menu/');
+    return response.data;
+  },
+  getMenuTree: async () => {
+    const response = await api.get('/menu/tree');
+    return response.data;
+  },
+  initMenus: async () => {
+    const response = await api.post('/menu/init');
+    return response.data;
+  },
+};
+
+// Infrastructure - 基建与系统管理
+export const infrastructure = {
+  // 设备配置管理
+  getDevices: async (params?: { device_type?: string; status?: string; search?: string }) => {
+    const response = await api.get('/infrastructure/devices', { params });
+    return response.data;
+  },
+  getDevice: async (id: number) => {
+    const response = await api.get(`/infrastructure/devices/${id}`);
+    return response.data;
+  },
+  createDevice: async (data: any) => {
+    const response = await api.post('/infrastructure/devices', data);
+    return response.data;
+  },
+  updateDevice: async (id: number, data: any) => {
+    const response = await api.put(`/infrastructure/devices/${id}`, data);
+    return response.data;
+  },
+  deleteDevice: async (id: number) => {
+    const response = await api.delete(`/infrastructure/devices/${id}`);
+    return response.data;
+  },
+  restartDevice: async (id: number) => {
+    const response = await api.post(`/infrastructure/devices/${id}/restart`);
+    return response.data;
+  },
+
+  // 网关管理
+  getGateways: async () => {
+    const response = await api.get('/infrastructure/gateways');
+    return response.data;
+  },
+  getGateway: async (id: number) => {
+    const response = await api.get(`/infrastructure/gateways/${id}`);
+    return response.data;
+  },
+
+  // 边缘服务器监控
+  getServers: async () => {
+    const response = await api.get('/infrastructure/servers');
+    return response.data;
+  },
+  getServer: async (id: number) => {
+    const response = await api.get(`/infrastructure/servers/${id}`);
+    return response.data;
+  },
+
+  // 零接触入网
+  getOnboardingTasks: async (status?: string) => {
+    const response = await api.get('/infrastructure/onboarding/tasks', { params: { status } });
+    return response.data;
+  },
+  startScan: async () => {
+    const response = await api.post('/infrastructure/onboarding/scan');
+    return response.data;
+  },
+  approveOnboarding: async (taskId: number) => {
+    const response = await api.post(`/infrastructure/onboarding/tasks/${taskId}/approve`);
+    return response.data;
+  },
+
+  // 门店基础配置
+  getBuildings: async () => {
+    const response = await api.get('/infrastructure/buildings');
+    return response.data;
+  },
+
+  // 日志审计
+  getLogs: async (params?: { user?: string; module?: string; action?: string; limit?: number }) => {
+    const response = await api.get('/infrastructure/logs', { params });
+    return response.data;
+  },
+
+  // 数据备份
+  getBackups: async () => {
+    const response = await api.get('/infrastructure/backups');
+    return response.data;
+  },
+  createBackup: async (backupType: string = 'full') => {
+    const response = await api.post('/infrastructure/backups', null, { params: { backup_type: backupType } });
+    return response.data;
+  },
 };

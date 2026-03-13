@@ -800,3 +800,34 @@ class RoomUpgrade(Base):
     status = Column(String(20), default="completed")  # 状态: pending, completed, cancelled
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class MenuItem(Base):
+    """菜单项表"""
+    __tablename__ = "menu_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)  # 菜单名称
+    path = Column(String(100))  # 路由路径（顶级菜单为空）
+    icon = Column(String(50))  # 图标名称
+    sort_order = Column(Integer, default=0)  # 排序
+    parent_id = Column(Integer, ForeignKey("menu_items.id"), nullable=True)  # 父菜单ID
+    is_visible = Column(Boolean, default=True)  # 是否可见
+    is_expandable = Column(Boolean, default=False)  # 是否可展开（包含子菜单）
+    default_expanded = Column(Boolean, default=False)  # 默认是否展开
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # 自关联
+    children = relationship("MenuItem", backref="parent", remote_side=[id])
+
+
+class RoleMenu(Base):
+    """角色菜单关联表"""
+    __tablename__ = "role_menus"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String(20), nullable=False)  # 角色: admin, manager, staff
+    menu_id = Column(Integer, ForeignKey("menu_items.id"), nullable=False)
+    can_access = Column(Boolean, default=True)  # 是否有权限访问
+    created_at = Column(DateTime, server_default=func.now())

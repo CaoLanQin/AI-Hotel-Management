@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
+import api, { menu } from '@/lib/api';
 import { 
   LayoutDashboard, 
   DoorOpen, 
@@ -17,57 +18,248 @@ import {
   Home,
   Zap,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  HardDrive,
+  Cpu,
+  Activity,
+  Shield,
+  Wifi,
+  Router,
+  Server,
+  Network,
+  Globe,
+  Building,
+  Users,
+  Database,
+  Layers,
+  ToggleLeft,
+  Library,
+  Link,
+  Brain,
+  BarChart
 } from 'lucide-react';
 
-// 采购管理子菜单配置
-const procurementMenuItems = [
-  { path: '/procurement/products', label: '商品浏览', icon: Store },
-  { path: '/procurement/cart', label: '购物车', icon: ShoppingCart },
-  { path: '/procurement/orders', label: '订单跟踪', icon: FileText },
-  { path: '/procurement/stock-in', label: '入库管理', icon: Truck },
-  { path: '/procurement/stock-out', label: '出库管理', icon: Package },
-  { path: '/procurement/inventory', label: '库存预警', icon: AlertTriangle },
-];
-
-// 主菜单配置
-const menuItems = [
-  { path: '/', label: '运营驾驶舱', icon: LayoutDashboard },
-  { path: '/rooms', label: '房间管理', icon: DoorOpen },
-  { path: '/bookings', label: '预订管理', icon: CalendarDays },
-  { path: '/checkin', label: '入住管理', icon: UserCheck },
-  { path: '/upgrade', label: '升级降级', icon: FileText },
-  { path: '/devices', label: '设备控制', icon: Settings },
-  { path: '/room-control', label: '客房智控', icon: Home },
-  { path: '/device-topology', label: '设备拓扑', icon: Settings },
-  { path: '/scenes', label: '场景管理', icon: Home },
-  { path: '/security', label: '安防监控', icon: AlertTriangle },
-  { path: '/maintenance', label: '维修管理', icon: Settings },
-  { path: '/rules', label: '规则引擎', icon: Zap },
-  { path: '/energy', label: '能耗管理', icon: Zap },
-];
-
-// 可控的采购管理模块配置（设为 null 则隐藏整个模块）
-const procurementConfig = {
-  enabled: true,  // 是否显示采购管理模块
-  label: '采购管理',
-  defaultExpanded: false,  // 默认是否展开子菜单
-  items: procurementMenuItems
+// 图标映射
+const iconMap: Record<string, React.ComponentType<any>> = {
+  LayoutDashboard,
+  DoorOpen,
+  CalendarDays,
+  UserCheck,
+  Settings,
+  ShoppingCart,
+  Package,
+  Truck,
+  AlertTriangle,
+  FileText,
+  Store,
+  Home,
+  Zap,
+  HardDrive,
+  Cpu,
+  Activity,
+  Shield,
+  Wifi,
+  Router,
+  Server,
+  Network,
+  Globe,
+  Building,
+  Users,
+  Database,
+  Layers,
+  ToggleLeft,
+  Library,
+  Link,
+  Brain,
+  BarChart,
 };
+
+// 菜单项类型
+interface MenuItemData {
+  id: number;
+  name: string;
+  path: string | null;
+  icon: string | null;
+  sort_order: number;
+  parent_id: number | null;
+  is_visible: boolean;
+  is_expandable: boolean;
+  default_expanded: boolean;
+  children: MenuItemData[];
+}
 
 const Layout = () => {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   
-  // 采购管理子菜单展开状态
-  const [procurementExpanded, setProcurementExpanded] = useState(procurementConfig.defaultExpanded);
+  const [menus, setMenus] = useState<MenuItemData[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // 判断当前是否在采购模块下
-  const isProcurementModule = location.pathname.startsWith('/procurement');
+  // 展开菜单状态（菜单ID -> 是否展开）
+  const [expandedMenus, setExpandedMenus] = useState<Record<number, boolean>>({});
   
-  // 自动展开采购菜单（当进入采购模块时）
-  const isInProcurement = location.pathname.startsWith('/procurement');
-  const displayProcurementExpanded = procurementExpanded || (procurementConfig.enabled && isInProcurement);
+  // 加载菜单
+  useEffect(() => {
+    const loadMenus = async () => {
+      try {
+        if (token) {
+          const menuData = await menu.getMenus();
+          setMenus(menuData);
+          
+          // 设置默认展开状态
+          const initialExpanded: Record<number, boolean> = {};
+          menuData.forEach((item: MenuItemData) => {
+            if (item.is_expandable && item.default_expanded) {
+              initialExpanded[item.id] = true;
+            }
+          });
+          setExpandedMenus(initialExpanded);
+        }
+      } catch (error) {
+        console.error('加载菜单失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadMenus();
+  }, [token]);
+  
+  // 切换菜单展开/折叠
+  const toggleMenu = (menuId: number) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuId]: !prev[menuId]
+    }));
+  };
+
+  // 检查路径是否匹配或包含（用于高亮）
+  const isActive = (path: string | null) => {
+    if (!path) return false;
+    if (path === '/') return location.pathname === '/';
+    return location.pathname === path || location.pathname === path + "/";
+  };
+
+  // 渲染图标
+  const renderIcon = (iconName: string | null) => {
+    if (!iconName || !iconMap[iconName]) return <Store size={20} />;
+    const Icon = iconMap[iconName];
+    return <Icon size={20} />;
+  };
+
+  // 渲染菜单项
+  const renderMenuItem = (item: MenuItemData, index: number, isSubMenu: boolean = false) => {
+    // 可展开的菜单（包含子菜单）
+    if (item.is_expandable || (item.children && item.children.length > 0)) {
+      const isExpanded = expandedMenus[item.id] ?? item.default_expanded;
+      const isCurrentActive = item.children?.some(child => isActive(child.path));
+      
+      return (
+        <div key={`${item.id}-${index}`}>
+          <div 
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors cursor-pointer ${
+              isCurrentActive
+                ? 'bg-blue-50 text-blue-600'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+            onClick={(e) => { e.preventDefault(); toggleMenu(item.id); }}
+          >
+            {renderIcon(item.icon)}
+            <span className={`font-medium ${isSubMenu ? 'text-xs' : 'text-sm'} flex-1`}>{item.name}</span>
+            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </div>
+          {isExpanded && item.children?.map((child, childIndex) => (
+            // 如果子菜单也可展开，递归渲染
+            (child.is_expandable || (child.children && child.children.length > 0)) ? (
+              <div key={child.id}>
+                <div 
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg mb-0.5 text-gray-600 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => toggleMenu(child.id)}
+                >
+                  {expandedMenus[child.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <span className="text-xs">{child.name}</span>
+                </div>
+                {expandedMenus[child.id] && child.children?.map((subChild: any) => (
+                  <RouterLink
+                    key={subChild.id}
+                    to={subChild.path || '#'}
+                    className={`flex items-center gap-3 px-4 py-2 rounded-lg mb-0.5 transition-colors ${
+                      isActive(subChild.path)
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="text-xs ml-6">{subChild.name}</span>
+                  </RouterLink>
+                ))}
+              </div>
+            ) : (
+              <RouterLink
+                key={child.id}
+                to={child.path || '#'}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg mb-0.5 transition-colors ${
+                  isActive(child.path)
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-xs ml-7">{child.name}</span>
+              </RouterLink>
+            )
+          ))}
+        </div>
+      );
+    }
+    
+    // 普通菜单项（如果没有path但有children，应该是可展开的）
+    if (!item.path) {
+      // 如果有children，渲染为可展开的菜单
+      if (item.children && item.children.length > 0) {
+        const isExpanded = expandedMenus[item.id] ?? item.default_expanded;
+        return (
+          <div key={item.id}>
+            <div 
+              className="flex items-center gap-3 px-4 py-3 rounded-lg mb-1 text-gray-600 hover:bg-gray-100 cursor-pointer"
+              onClick={() => toggleMenu(item.id)}
+            >
+              {renderIcon(item.icon)}
+              <span className="font-medium text-sm flex-1">{item.name}</span>
+              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </div>
+            {isExpanded && item.children.map((subChild: any) => (
+              <RouterLink
+                key={subChild.id}
+                to={subChild.path || '#'}
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg mb-0.5 transition-colors ${
+                  isActive(subChild.path)
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-xs ml-6">{subChild.name}</span>
+              </RouterLink>
+            ))}
+          </div>
+        );
+      }
+      return null;
+    }
+    
+    return (
+      <RouterLink
+        key={item.id}
+        to={item.path}
+        className={`flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
+          isActive(item.path)
+            ? 'bg-blue-50 text-blue-600'
+            : 'text-gray-600 hover:bg-gray-100'
+        }`}
+      >
+        {renderIcon(item.icon)}
+        <span className={`font-medium ${isSubMenu ? 'text-xs' : 'text-sm'}`}>{item.name}</span>
+      </RouterLink>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -94,55 +286,10 @@ const Layout = () => {
         {/* 侧边栏 */}
         <aside className="w-56 bg-white border-r min-h-[calc(100vh-64px)]">
           <nav className="p-4">
-            {/* 主菜单 */}
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
-
-            {/* 采购模块菜单 */}
-            {procurementConfig.enabled && (
-              <div className="mt-4 pt-4 border-t">
-                <div 
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600"
-                  onClick={() => setProcurementExpanded(!procurementExpanded)}
-                >
-                  {procurementExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {procurementConfig.label}
-                </div>
-                {displayProcurementExpanded && procurementConfig.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-lg mb-0.5 transition-colors ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span className="text-sm">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+            {loading ? (
+              <div className="text-center text-gray-400 py-4">加载中...</div>
+            ) : (
+              menus.map((item, index) => renderMenuItem(item, index))
             )}
           </nav>
         </aside>

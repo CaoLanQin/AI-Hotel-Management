@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.database import engine, Base
-from app.api import auth, users, rooms, bookings, checkin, guests, devices, dashboard, purchase, procurement
+from app.api import auth, users, rooms, bookings, checkin, guests, devices, dashboard, purchase, procurement, menu, infrastructure, scenes, rules, energy, topology
 
 settings = get_settings()
 
@@ -63,6 +63,12 @@ app.include_router(devices.router, prefix="/api/v1/devices", tags=["设备"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["驾驶舱"])
 # app.include_router(purchase.router, prefix="/api/v1/purchase", tags=["供应链采购"])
 app.include_router(procurement.router, prefix="/api/v1/procurement", tags=["智能采购商城"])
+app.include_router(menu.router, prefix="/api/v1/menu", tags=["菜单管理"])
+app.include_router(infrastructure.router, prefix="/api/v1/infrastructure", tags=["基建与系统管理"])
+app.include_router(scenes.router, prefix="/api/v1", tags=["场景管理"])
+app.include_router(rules.router, prefix="/api/v1", tags=["规则引擎"])
+app.include_router(energy.router, prefix="/api/v1", tags=["能耗管理"])
+app.include_router(topology.router, prefix="/api/v1", tags=["设备拓扑"])
 
 
 if __name__ == "__main__":
